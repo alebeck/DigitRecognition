@@ -24,8 +24,10 @@ class Trainer:
         
         # setup data loaders
         idx = list(range(len(self.dataset)))
+
         if shuffle:
             np.random.shuffle(idx)
+
         split = int(np.floor(validation_size * len(self.dataset)))
         train_idx, validation_idx = idx[split:], idx[:split]
         
@@ -34,16 +36,19 @@ class Trainer:
         
         self.train_loader = DataLoader(self.dataset, self.batch_size, False, train_sampler, num_workers=self.num_workers)
         self.val_loader = DataLoader(self.dataset, self.batch_size, False, val_sampler, num_workers=self.num_workers)
-        print('test1')
         
     def train(self):
-        print('test2')
         # initialize optimizer
         optim = self.optim(self.model.parameters(), **self.optim_args)
+
         # initialize scheduler
-        sched = ReduceLROnPlateau(optim, patience=1)
+        sched = ReduceLROnPlateau(optim, patience=5)
+
         # set device
-        self.model.to(torch.device("cuda:0" if torch.cuda.is_available() else "cpu"))
+        self.model.is_cuda = torch.cuda.is_available()
+        if self.model.is_cuda:
+            print("Moving model to GPU...")
+            self.model.cuda()
         
         iter_per_epoch = len(self.train_loader)
         
@@ -54,6 +59,9 @@ class Trainer:
             
             for i, (x, y) in enumerate(self.train_loader):
                 # (x,y) ^= current minibatch
+                if self.model.is_cuda:
+                    x, y = x.cuda(), y.cuda()
+
                 out = self.model(x)
                 optim.zero_grad()
                 loss = self.loss_func(out, y)
