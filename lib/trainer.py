@@ -38,17 +38,17 @@ class Trainer:
         self.val_loader = DataLoader(self.dataset, self.batch_size, False, val_sampler, num_workers=self.num_workers)
         
     def train(self):
-        # initialize optimizer
-        optim = self.optim(self.model.parameters(), **self.optim_args)
-
-        # initialize scheduler
-        sched = ReduceLROnPlateau(optim, patience=5)
-
         # set device
         self.model.is_cuda = torch.cuda.is_available()
         if self.model.is_cuda:
             print("Moving model to GPU...")
             self.model.cuda()
+            
+        # initialize optimizer
+        optim = self.optim(self.model.parameters(), **self.optim_args)
+
+        # initialize scheduler
+        sched = ReduceLROnPlateau(optim, patience=5)
         
         iter_per_epoch = len(self.train_loader)
         
@@ -78,10 +78,14 @@ class Trainer:
             # validation
             self.model.eval()
             loss_sum, acc_sum = 0, 0
-            for x, y in self.val_loader:
-                out = self.model(x)
-                loss_sum += self.loss_func(out, y)
-                acc_sum += (out.max(1)[1] == y).sum().data.numpy() / y.shape[0]
+            with torch.no_grad():
+                for x, y in self.val_loader:
+                    if self.model.is_cuda:
+                        x, y = x.cuda(), y.cuda()
+                        
+                    out = self.model(x)
+                    loss_sum += self.loss_func(out, y)
+                    acc_sum += (out.max(1)[1] == y).sum().data.numpy() / y.shape[0]
 
             val_loss = loss_sum / len(self.val_loader)
             val_acc = acc_sum / len(self.val_loader)
@@ -89,4 +93,4 @@ class Trainer:
             
             sched.step(val_loss)
         
-        print("Finished training...")
+        print("Finished training.")
